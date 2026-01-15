@@ -1,0 +1,141 @@
+services:
+#######################################################
+############## APISIX + etcd    #######################
+#######################################################
+  etcd:
+    image: bitnamilegacy/etcd:latest
+    restart: always
+    volumes:
+      - etcd_data:/bitnami/etcd
+    environment:
+      ETCD_ENABLE_V2: "true"
+      ALLOW_NONE_AUTHENTICATION: "yes"
+      ETCD_ADVERTISE_CLIENT_URLS: "http://etcd:2379"
+      ETCD_LISTEN_CLIENT_URLS: "http://0.0.0.0:2379"
+    ports:
+      - "2379:2379/tcp"
+    networks:
+      apisix:
+
+  apisix:
+    image: apache/apisix:${APISIX_IMAGE_TAG:-3.14.1-debian}
+    restart: always
+    volumes:
+      - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
+      - ./apisix/apisix.yaml:/usr/local/apisix/conf/apisix.yaml:ro
+    depends_on:
+      - etcd
+      - kratos
+    ports:
+      - "9180:9180/tcp"
+      - "9080:9080/tcp"
+      - "9091:9091/tcp"
+      - "9443:9443/tcp"
+      - "9092:9092/tcp"
+    networks:
+      apisix:
+      intranet:
+#######################################################
+############## Ory Kratos (identity management) #######
+#######################################################
+
+  postgres-kratos:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=kratos
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=kratos
+    networks:
+      - intranet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kratos -d kratos"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  kratos-migrate:
+    image: oryd/kratos:latest
+    depends_on:
+      postgres-kratos:
+        condition: service_healthy
+    environment:
+      - DSN=postgres://kratos:secret@postgres-kratos:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
+    networks:
+      - intranet
+    volumes:
+      - type: bind
+        source: ./kratos
+        target: /etc/config/kratos
+    command: -c /etc/config/kratos/kratos.yml migrate sql -e --yes
+  kratos:
+    image: oryd/kratos:latest
+    depends_on:
+      kratos-migrate:
+        condition: service_completed_successfully
+    environment:
+      - DSN=postgres://kratos:secret@postgres-kratos:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
+    ports:
+      - "4433:4433"
+      - "4434:4434"
+    volumes:
+      - type: bind
+        source: ./kratos
+        target: /etc/config/kratos
+    networks:
+      - intranet
+    command: serve -c /etc/config/kratos/kratos.yml --dev --watch-courier
+  kratos-selfservice-ui-node:
+    image: oryd/kratos-selfservice-ui-node:latest
+    depends_on:
+      - kratos
+    environment:
+      - KRATOS_PUBLIC_URL=http://kratos:4433/
+      - KRATOS_BROWSER_URL=http://127.0.0.1:9080/.ory/kratos/public/
+    networks:
+      - intranet
+    restart: on-failure
+    
+#######################################################
+#############  Backend API Service ####################
+#######################################################
+  backend:
+    build:
+      context: ../back
+    ports:
+      - "8080:8080"
+    networks:
+      - intranet
+
+#######################################################
+#############  Frontend Service #######################
+#######################################################
+  frontend:
+    build:
+      dockerfile: ../front/Dockerfile
+      context: ../front
+      args:
+        NEXT_PUBLIC_ORY_SDK_URL: http://127.0.0.1:9080/.ory/kratos/public
+        NEXT_PUBLIC_BACKEND_URL: http://127.0.0.1:9080/api
+    environment:
+      - ORY_SDK_URL=http://kratos:4433
+      - BACKEND_API_URL=http://backend:8080
+      - NODE_ENV=production
+    expose:
+      - "3000"
+    networks:
+      - intranet
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+networks:
+  apisix:
+    driver: bridge
+  intranet:
+    driver: bridge
+
+volumes:
+  etcd_data:
+    driver: local

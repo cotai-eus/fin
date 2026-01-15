@@ -1,0 +1,132 @@
+---
+id: email-http
+title: HTTP based email delivery
+sidebar_label: Sending emails via HTTP API
+---
+
+To send emails using an external mail provider instead of a local SMTP server, Ory Kratos can use an HTTP API (such as Mailchimp,
+your local mail sender, or your own microservice). Request method, headers, body, and content-type are fully configurable using
+the options below.
+
+## Configuration
+
+By default, Ory Kratos doesn't use API calls to send mail. To enable it set the `delivery_strategy` configuration key to `http`,
+URL, authorization (if needed) and request body format.
+
+### Request configuration
+
+```yaml title="config.yml"
+courier:
+  delivery_strategy: http
+  http:
+    request_config:
+      url: https://api.crm.com/email
+      method: POST
+      body: file://.mail.api.request.jsonnet
+      headers:
+        "Content-Type": "application/json"
+      auth:
+        type: basic_auth
+        config:
+          user: YourUsername
+          password: YourPass
+```
+
+The configuration consists of:
+
+- `url` - the URL, which should be called (mandatory). It needs to be absolute, start with http:// or https:// scheme, and include
+  path part - for example "https://api.sender.com/v1/message".
+- `method` - the HTTP method (GET, POST, ...) (mandatory)
+- `body` - URI of a Jsonnet template, used to render the payload to send (optional). Use a `file://path/to/body.jsonnet` URL for
+  referring to local files. This property is ignored for HTTP `method`s, which don't support sending of HTTP body payloads
+  (TRACE).
+- `auth` - configuration of authentication and authorization mechanisms to be used by request
+
+The courier passes the `recipient`, `template_type`, and `template_data` variables into the Jsonnet template. These variables are
+available through a `ctx` object. `recipient` will always be the email address of the user. `template_type` and the fields in
+`template_data` are linked in the following way with each template type containing the fields listed below:
+
+- recovery_invalid
+  - to
+- recovery_valid
+  - to
+  - recovery_url
+  - identity
+- recovery_code_invalid
+  - to
+- recovery_code_valid
+  - to
+  - recovery_code
+  - identity
+- verification_invalid
+  - to
+- verification_valid
+  - to
+  - verification_url
+  - identity
+- verification_code_invalid
+  - to
+- verification_code_valid
+  - to
+  - verification_code
+  - identity
+
+A universal Jsonnet template that works with all flows, would look like this:
+
+```jsonnet
+function(ctx) {
+  recipient: ctx.recipient,
+  template_type: ctx.template_type,
+  name: if "template_data" in ctx && "identity" in ctx.template_data && "name" in ctx.template_data.identity then ctx.template_data.identity.name else null,
+  to: if "template_data" in ctx && "to" in ctx.template_data then ctx.template_data.to else null,
+  recovery_code: if "template_data" in ctx && "recovery_code" in ctx.template_data then ctx.template_data.recovery_code else null,
+  recovery_url: if "template_data" in ctx && "recovery_url" in ctx.template_data then ctx.template_data.recovery_url else null,
+  verification_url: if "template_data" in ctx && "verification_url" in ctx.template_data then ctx.template_data.verification_url else null,
+  verification_code: if "template_data" in ctx && "verification_code" in ctx.template_data then ctx.template_data.verification_code else null,
+}
+
+```
+
+This is also the default, if no `body` is specified.
+
+### Authentication and authorization
+
+For `auth` following mechanisms are supported:
+
+- Authentication via an API Key. `type` must be set to `api_key`.
+- Authentication via Basic Authentication. `type` must be set to `basic_auth`.
+
+For `api_key` the config looks as follows:
+
+```yaml
+courier:
+  delivery_strategy: http
+  http:
+    request_config:
+      # ... other config
+      auth:
+        type: api_key
+        config:
+          name: key-name
+          value: key-value
+          in: header # or cookie
+```
+
+All properties are mandatory.
+
+For `basic_auth` the config looks as follows:
+
+```yaml
+courier:
+  delivery_strategy: http
+  http:
+    request_config:
+      # ... other config
+      auth:
+        type: basic_auth
+        config:
+          user: My-User
+          password: My-Pass-Value
+```
+
+All properties are mandatory.

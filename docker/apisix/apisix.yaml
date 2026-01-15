@@ -1,0 +1,78 @@
+#
+# APISIX Standalone YAML Configuration
+# Routes and Upstreams for Kratos Integration
+#
+
+upstreams:
+  - id: backend
+    nodes:
+      "backend:8080": 1
+    type: roundrobin
+
+  - id: frontend
+    nodes:
+      "frontend:3000": 1
+    type: roundrobin
+
+  - id: kratos-public
+    nodes:
+      "kratos:4433": 1
+    type: roundrobin
+
+  - id: kratos-ui
+    nodes:
+      "kratos-selfservice-ui-node:3000": 1
+    type: roundrobin
+
+routes:
+  # API routes - protected with forward-auth
+  - id: api
+    uri: /api/*
+    upstream_id: backend
+    plugins:
+      forward-auth:
+        uri: "http://kratos:4433/sessions/whoami"
+        request_headers:
+          - "Cookie"
+        upstream_headers:
+          - "X-Kratos-Authenticated-Identity-Id"
+        client_headers:
+          - "Set-Cookie"
+      proxy-rewrite:
+        regex_uri:
+          - "^/api/(.*)"
+          - "/$1"
+
+  # Kratos public API - proxy to Kratos
+  - id: kratos-api
+    uri: /.ory/kratos/public/*
+    upstream_id: kratos-public
+    plugins:
+      proxy-rewrite:
+        regex_uri:
+          - "^/.ory/kratos/public/(.*)"
+          - "/$1"
+      cors:
+        allow_origins: "http://127.0.0.1:3000,http://localhost:3000,http://127.0.0.1:9080"
+        allow_methods: "GET,POST,PUT,DELETE,OPTIONS"
+        allow_headers: "Content-Type,Authorization,Cookie"
+        allow_credential: true
+        max_age: 3600
+
+  # Kratos self-service UI
+  - id: kratos-ui
+    uri: /auth/*
+    upstream_id: kratos-ui
+    plugins:
+      proxy-rewrite:
+        regex_uri:
+          - "^/auth/(.*)"
+          - "/$1"
+
+  # Frontend - public access (catch-all, must be last)
+  - id: frontend
+    uri: /*
+    upstream_id: frontend
+    priority: -1
+
+#END
