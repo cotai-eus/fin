@@ -74,9 +74,8 @@ export async function executeTransfer(formData: unknown) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${(session as unknown as { session_token: string }).session_token}`,
+        "X-Kratos-Authenticated-Identity-Id": userId,
         "X-Request-ID": crypto.randomUUID(),
-        "X-User-ID": userId,
       },
       body: JSON.stringify(validated.data),
     });
@@ -138,8 +137,9 @@ export async function cancelTransfer(transferId: string) {
       {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${(session as unknown as { session_token: string }).session_token}`,
-          "X-User-ID": userId,
+          "Content-Type": "application/json",
+          "X-Kratos-Authenticated-Identity-Id": userId,
+          "X-Request-ID": crypto.randomUUID(),
         },
       }
     );
@@ -189,8 +189,8 @@ export async function exportTransaction(formData: unknown) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${(session as unknown as { session_token: string }).session_token}`,
-          "X-User-ID": userId,
+          "X-Kratos-Authenticated-Identity-Id": userId,
+          "X-Request-ID": crypto.randomUUID(),
         },
         body: JSON.stringify({
           format: validated.data.format,

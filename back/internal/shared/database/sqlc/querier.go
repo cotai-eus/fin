@@ -15,6 +15,7 @@ type Querier interface {
 	CancelTransfer(ctx context.Context, id uuid.UUID) (Transfer, error)
 	CountAllTickets(ctx context.Context) (int64, error)
 	CountAuditLogsByUser(ctx context.Context, userID uuid.NullUUID) (int64, error)
+	CountCardTransactions(ctx context.Context, cardID uuid.UUID) (int64, error)
 	CountTicketMessages(ctx context.Context, ticketID uuid.UUID) (int64, error)
 	CountTicketsByStatus(ctx context.Context, status string) (int64, error)
 	CountUserActiveCards(ctx context.Context, userID uuid.UUID) (int64, error)
@@ -31,6 +32,7 @@ type Querier interface {
 	// CARDS QUERIES
 	// ========================================
 	CreateCard(ctx context.Context, arg CreateCardParams) (Card, error)
+	CreateCardTransaction(ctx context.Context, arg CreateCardTransactionParams) (CardTransaction, error)
 	// Support Tickets Queries
 	CreateTicket(ctx context.Context, arg CreateTicketParams) (SupportTicket, error)
 	// Ticket Messages Queries
@@ -54,6 +56,9 @@ type Querier interface {
 	GetBudgetsNearLimit(ctx context.Context, userID uuid.UUID) ([]Budget, error)
 	GetCardByID(ctx context.Context, id uuid.UUID) (Card, error)
 	GetCardForUpdate(ctx context.Context, id uuid.UUID) (Card, error)
+	GetCardTransactionByID(ctx context.Context, id uuid.UUID) (CardTransaction, error)
+	GetCardTransactionsByCategory(ctx context.Context, arg GetCardTransactionsByCategoryParams) ([]GetCardTransactionsByCategoryRow, error)
+	GetCardTransactionsByDateRange(ctx context.Context, arg GetCardTransactionsByDateRangeParams) ([]CardTransaction, error)
 	GetDailyTransferSum(ctx context.Context, userID uuid.UUID) (int64, error)
 	GetLatestTicketMessage(ctx context.Context, ticketID uuid.UUID) (TicketMessage, error)
 	GetMonthlyTransferSum(ctx context.Context, userID uuid.UUID) (int64, error)
@@ -76,6 +81,7 @@ type Querier interface {
 	ListActiveUserCards(ctx context.Context, userID uuid.UUID) ([]Card, error)
 	// Admin/Staff Queries
 	ListAllTickets(ctx context.Context, arg ListAllTicketsParams) ([]SupportTicket, error)
+	ListCardTransactions(ctx context.Context, arg ListCardTransactionsParams) ([]CardTransaction, error)
 	ListOverdueBills(ctx context.Context, arg ListOverdueBillsParams) ([]Bill, error)
 	ListTicketMessages(ctx context.Context, arg ListTicketMessagesParams) ([]TicketMessage, error)
 	ListTicketsByStatus(ctx context.Context, arg ListTicketsByStatusParams) ([]SupportTicket, error)
@@ -84,10 +90,12 @@ type Querier interface {
 	ListUserBudgets(ctx context.Context, arg ListUserBudgetsParams) ([]Budget, error)
 	ListUserBudgetsByCategory(ctx context.Context, arg ListUserBudgetsByCategoryParams) ([]Budget, error)
 	ListUserBudgetsByPeriod(ctx context.Context, arg ListUserBudgetsByPeriodParams) ([]Budget, error)
+	ListUserCardTransactions(ctx context.Context, arg ListUserCardTransactionsParams) ([]CardTransaction, error)
 	ListUserCards(ctx context.Context, userID uuid.UUID) ([]Card, error)
 	ListUserTickets(ctx context.Context, arg ListUserTicketsParams) ([]SupportTicket, error)
 	ListUserTicketsByStatus(ctx context.Context, arg ListUserTicketsByStatusParams) ([]SupportTicket, error)
 	ListUserTransfers(ctx context.Context, arg ListUserTransfersParams) ([]Transfer, error)
+	ListUserTransfersByStatus(ctx context.Context, arg ListUserTransfersByStatusParams) ([]Transfer, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
 	MarkBillAsPaid(ctx context.Context, id uuid.UUID) (Bill, error)
 	ResetAllDailySpent(ctx context.Context) error

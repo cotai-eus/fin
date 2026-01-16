@@ -327,6 +327,63 @@ func (q *Queries) ListUserTransfers(ctx context.Context, arg ListUserTransfersPa
 	return items, nil
 }
 
+const listUserTransfersByStatus = `-- name: ListUserTransfersByStatus :many
+SELECT id, user_id, type, status, amount_cents, fee_cents, currency, pix_key, pix_key_type, recipient_name, recipient_document, recipient_bank, recipient_branch, recipient_account, recipient_account_type, recipient_user_id, scheduled_for, completed_at, failure_reason, authentication_code, created_at, updated_at FROM transfers
+WHERE user_id = $1 AND status = $2
+ORDER BY created_at DESC
+`
+
+type ListUserTransfersByStatusParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	Status string    `json:"status"`
+}
+
+func (q *Queries) ListUserTransfersByStatus(ctx context.Context, arg ListUserTransfersByStatusParams) ([]Transfer, error) {
+	rows, err := q.db.QueryContext(ctx, listUserTransfersByStatus, arg.UserID, arg.Status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Transfer{}
+	for rows.Next() {
+		var i Transfer
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Type,
+			&i.Status,
+			&i.AmountCents,
+			&i.FeeCents,
+			&i.Currency,
+			&i.PixKey,
+			&i.PixKeyType,
+			&i.RecipientName,
+			&i.RecipientDocument,
+			&i.RecipientBank,
+			&i.RecipientBranch,
+			&i.RecipientAccount,
+			&i.RecipientAccountType,
+			&i.RecipientUserID,
+			&i.ScheduledFor,
+			&i.CompletedAt,
+			&i.FailureReason,
+			&i.AuthenticationCode,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateTransferStatus = `-- name: UpdateTransferStatus :one
 UPDATE transfers
 SET

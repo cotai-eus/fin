@@ -318,3 +318,75 @@ func (r *Repository) CountUserActiveCards(ctx context.Context, userID string) (i
 	}
 	return count, nil
 }
+
+// CreateCardTransaction persists a card transaction
+func (r *Repository) CreateCardTransaction(
+	ctx context.Context,
+	params db.CreateCardTransactionParams,
+) (*db.CardTransaction, error) {
+	tx, err := r.queries.CreateCardTransaction(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	return &tx, nil
+}
+
+// ListCardTransactions retrieves transactions for a card with pagination
+func (r *Repository) ListCardTransactions(
+	ctx context.Context,
+	cardID uuid.UUID,
+	limit, offset int32,
+) ([]db.CardTransaction, error) {
+	txs, err := r.queries.ListCardTransactions(ctx, db.ListCardTransactionsParams{
+		CardID: cardID,
+		Limit:  limit,
+		Offset: offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return txs, nil
+}
+
+// ListUserCardTransactions retrieves all user card transactions
+func (r *Repository) ListUserCardTransactions(
+	ctx context.Context,
+	userID uuid.UUID,
+	limit, offset int32,
+) ([]db.CardTransaction, error) {
+	txs, err := r.queries.ListUserCardTransactions(ctx, db.ListUserCardTransactionsParams{
+		UserID: userID,
+		Limit:  limit,
+		Offset: offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return txs, nil
+}
+
+// GetCardTransactionsByCategory retrieves spending by category
+func (r *Repository) GetCardTransactionsByCategory(
+	ctx context.Context,
+	userID uuid.UUID,
+	startDate, endDate sql.NullTime,
+) ([]db.GetCardTransactionsByCategoryRow, error) {
+	return r.queries.GetCardTransactionsByCategory(ctx, db.GetCardTransactionsByCategoryParams{
+		UserID:    userID,
+		StartDate: startDate.Time,
+		EndDate:   endDate.Time,
+	})
+}
+
+// GetCardTransactionsByDateRange retrieves transactions in a date range
+func (r *Repository) GetCardTransactionsByDateRange(
+	ctx context.Context,
+	userID uuid.UUID,
+	startDate, endDate sql.NullTime,
+) ([]db.CardTransaction, error) {
+	return r.queries.GetCardTransactionsByDateRange(ctx, db.GetCardTransactionsByDateRangeParams{
+		UserID:    userID,
+		StartDate: startDate.Time,
+		EndDate:   endDate.Time,
+	})
+}

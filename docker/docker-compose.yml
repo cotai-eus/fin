@@ -90,6 +90,9 @@ services:
     environment:
       - KRATOS_PUBLIC_URL=http://kratos:4433/
       - KRATOS_BROWSER_URL=http://127.0.0.1:9080/.ory/kratos/public/
+      - COOKIE_SECRET=changeme-please-use-random
+      - CSRF_COOKIE_NAME=__HOST-csrf
+      - CSRF_COOKIE_SECRET=changeme-csrf-random-secret
     networks:
       - intranet
     restart: on-failure
@@ -135,14 +138,18 @@ services:
   backend:
     build:
       context: ../back
-      dockerfile: ../back/Dockerfile
+      dockerfile: Dockerfile
     ports:
       - "8080:8080"
+    env_file:
+      - ../back/.env
     networks:
       - intranet
     depends_on:
       db-core:
         condition: service_healthy
+      db-core-migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
       interval: 10s
@@ -152,16 +159,18 @@ services:
     restart: unless-stopped
     environment:
       - DATABASE_URL=postgres://postgres:postgres@db-core:5432/lauratech?sslmode=disable
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-rxLfh1qxVWFUbGP3pjucwS4oaDc49Y0M+508SV8KyoM=}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-32cff1bed37bfe6f2d9ad7ae6b95534d}
       - ENVIRONMENT=production
+      - PORT=8080
+      - TRUSTED_PROXY_IP=apisix
 
 #######################################################
 #############  Frontend Service #######################
 #######################################################
   frontend:
     build:
-      dockerfile: ../front/Dockerfile
       context: ../front
+      dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_ORY_SDK_URL: http://127.0.0.1:9080/.ory/kratos/public
         NEXT_PUBLIC_BACKEND_URL: http://127.0.0.1:9080/api
@@ -169,8 +178,13 @@ services:
       - ORY_SDK_URL=http://kratos:4433
       - BACKEND_API_URL=http://backend:8080
       - NODE_ENV=production
-    expose:
-      - "3000"
+      - PORT=3000
+      - HOST=0.0.0.0
+    depends_on:
+      - backend
+      - kratos
+    ports:
+      - "3000:3000"
     networks:
       - intranet
     healthcheck:
@@ -179,6 +193,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    restart: unless-stopped
 
 networks:
   apisix:

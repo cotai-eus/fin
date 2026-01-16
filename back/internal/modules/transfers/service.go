@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	db "github.com/lauratech/fin/back/internal/shared/database/sqlc"
 	"github.com/lauratech/fin/back/internal/modules/users"
+	db "github.com/lauratech/fin/back/internal/shared/database/sqlc"
 )
 
 const (
@@ -432,6 +432,214 @@ func (s *Service) GetByID(ctx context.Context, userID, transferID string) (*Tran
 	}
 
 	return dbTransferToTransfer(dbTransfer), nil
+}
+
+// ExecuteDeposit processes a deposit transaction
+func (s *Service) ExecuteDeposit(ctx context.Context, userID string, req ExecuteDepositRequest) (*Transfer, error) {
+	// Validate amount
+	if err := ValidateAmount(req.AmountCents); err != nil {
+		return nil, err
+	}
+
+	// Execute deposit in transaction
+	var transfer *db.Transfer
+	err := s.executeInTransaction(ctx, func(tx *sql.Tx) error {
+		qtx := db.New(tx)
+		userUUID, _ := uuid.Parse(userID)
+
+		// 1. Create transfer record
+		dbTransfer, err := qtx.CreateTransfer(ctx, db.CreateTransferParams{
+			UserID:      userUUID,
+			Type:        "deposit",
+			Status:      "completed",
+			AmountCents: req.AmountCents,
+			FeeCents:    sql.NullInt64{Int64: 0, Valid: true},
+			Currency:    sql.NullString{String: "BRL", Valid: true},
+			CompletedAt: sql.NullTime{Time: time.Now(), Valid: true},
+		})
+		if err != nil {
+			return err
+		}
+
+		// 2. Credit user balance
+		err = qtx.UpdateUserBalance(ctx, db.UpdateUserBalanceParams{
+			ID:           userUUID,
+			BalanceCents: sql.NullInt64{Int64: req.AmountCents, Valid: true},
+		})
+		if err != nil {
+			return err
+		}
+
+		transfer = &dbTransfer
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return dbTransferToTransfer(transfer), nil
+}
+
+// CreatePaymentRequest creates a P2P payment request (pending status)
+func (s *Service) CreatePaymentRequest(ctx context.Context, userID string, req CreatePaymentRequestRequest) (*Transfer, error) {
+	// Validate amount
+	if err := ValidateAmount(req.AmountCents); err != nil {
+		return nil, err
+	}
+
+	// Cannot request payment from self
+	if req.RecipientUserID == userID {
+		return nil, ErrCannotTransferToSelf
+	}
+
+	// Check recipient exists
+	recipientUUID, err := uuid.Parse(req.RecipientUserID)
+	if err != nil {
+		return nil, ErrRecipientNotFound
+	}
+
+	_, err = s.userRepo.GetByID(context.Background(), req.RecipientUserID)
+	if err != nil {
+		return nil, ErrRecipientNotFound
+	}
+
+	// Create pending transfer
+	userUUID, _ := uuid.Parse(userID)
+	dbTransfer, err := s.repo.Create(ctx, db.CreateTransferParams{
+		UserID:          userUUID,
+		Type:            "p2p",
+		Status:          "pending",
+		AmountCents:     req.AmountCents,
+		FeeCents:        sql.NullInt64{Int64: 0, Valid: true},
+		Currency:        sql.NullString{String: "BRL", Valid: true},
+		RecipientUserID: uuid.NullUUID{UUID: recipientUUID, Valid: true},
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return dbTransferToTransfer(dbTransfer), nil
+}
+
+// ListPaymentRequests lists pending payment requests for a user
+func (s *Service) ListPaymentRequests(ctx context.Context, userID string) ([]Transfer, error) {
+	userUUID, _ := uuid.Parse(userID)
+
+	// Query transfers with type='p2p' and status='pending'
+	dbTransfers, err := s.repo.ListByUserAndStatus(ctx, userUUID, "pending")
+	if err != nil {
+		return nil, err
+	}
+
+	return dbTransfersToTransfers(dbTransfers), nil
+}
+
+// ApprovePaymentRequest approves a payment request and executes the transfer
+func (s *Service) ApprovePaymentRequest(ctx context.Context, userID string, requestID string) (*Transfer, error) {
+	requestUUID, err := uuid.Parse(requestID)
+	if err != nil {
+		return nil, ErrTransferNotFound
+	}
+
+	// Execute in transaction
+	var transfer *db.Transfer
+	err = s.executeInTransaction(ctx, func(tx *sql.Tx) error {
+		qtx := db.New(tx)
+		userUUID, _ := uuid.Parse(userID)
+
+		// 1. Get payment request
+		dbTransfer, err := qtx.GetTransferByID(ctx, requestUUID)
+		if err != nil {
+			return ErrTransferNotFound
+		}
+
+		// 2. Verify recipient is the approver
+		if !dbTransfer.RecipientUserID.Valid || dbTransfer.RecipientUserID.UUID.String() != userID {
+			return ErrTransferNotFound
+		}
+
+		// 3. Check status is pending
+		if dbTransfer.Status != "pending" {
+			return ErrInvalidTransferStatus
+		}
+
+		// 4. Lock payer user record
+		payerUser, err := qtx.GetUserForUpdate(ctx, dbTransfer.UserID)
+		if err != nil {
+			return err
+		}
+
+		// 5. Check balance
+		payerBalance := int64(0)
+		if payerUser.BalanceCents.Valid {
+			payerBalance = payerUser.BalanceCents.Int64
+		}
+		if payerBalance < dbTransfer.AmountCents {
+			return ErrInsufficientBalance
+		}
+
+		// 6. Debit payer
+		err = qtx.UpdateUserBalance(ctx, db.UpdateUserBalanceParams{
+			ID:           dbTransfer.UserID,
+			BalanceCents: sql.NullInt64{Int64: -dbTransfer.AmountCents, Valid: true},
+		})
+		if err != nil {
+			return err
+		}
+
+		// 7. Credit recipient
+		err = qtx.UpdateUserBalance(ctx, db.UpdateUserBalanceParams{
+			ID:           userUUID,
+			BalanceCents: sql.NullInt64{Int64: dbTransfer.AmountCents, Valid: true},
+		})
+		if err != nil {
+			return err
+		}
+
+		// 8. Update transfer status
+		updatedTransfer, err := qtx.UpdateTransferStatus(ctx, db.UpdateTransferStatusParams{
+			ID:            requestUUID,
+			Status:        "completed",
+			FailureReason: sql.NullString{Valid: false},
+		})
+		if err != nil {
+			return err
+		}
+
+		transfer = &updatedTransfer
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return dbTransferToTransfer(transfer), nil
+}
+
+// RejectPaymentRequest rejects a payment request
+func (s *Service) RejectPaymentRequest(ctx context.Context, userID string, requestID string) error {
+	// Get payment request
+	dbTransfer, err := s.repo.GetByID(ctx, requestID)
+	if err != nil {
+		return ErrTransferNotFound
+	}
+
+	// Verify recipient is the rejector
+	if !dbTransfer.RecipientUserID.Valid || dbTransfer.RecipientUserID.UUID.String() != userID {
+		return ErrTransferNotFound
+	}
+
+	// Check status is pending
+	if dbTransfer.Status != "pending" {
+		return ErrInvalidTransferStatus
+	}
+
+	// Update status to cancelled
+	_, err = s.repo.UpdateStatus(ctx, requestID, "cancelled", nil)
+	return err
 }
 
 // executeInTransaction executes a function within a database transaction

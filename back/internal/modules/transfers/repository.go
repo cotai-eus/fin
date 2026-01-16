@@ -158,3 +158,11 @@ func (r *Repository) GetForUpdate(ctx context.Context, id string) (*db.Transfer,
 func (r *Repository) WithTx(tx *sql.Tx) *db.Queries {
 	return r.queries.WithTx(tx)
 }
+
+// ListByUserAndStatus lists transfers for a user with a specific status
+func (r *Repository) ListByUserAndStatus(ctx context.Context, userID uuid.UUID, status string) ([]db.Transfer, error) {
+	return r.queries.ListUserTransfersByStatus(ctx, db.ListUserTransfersByStatusParams{
+		UserID: userID,
+		Status: status,
+	})
+}

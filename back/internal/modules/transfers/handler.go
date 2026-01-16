@@ -244,3 +244,117 @@ func (h *Handler) handleTransferError(w http.ResponseWriter, err error) {
 		response.Error(w, http.StatusInternalServerError, "SYS_001", "Internal server error", nil)
 	}
 }
+
+// ExecuteDeposit handles deposit requests
+// POST /api/deposits
+func (h *Handler) ExecuteDeposit(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("user_id").(string)
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "AUTH_001", "Unauthorized", nil)
+		return
+	}
+
+	var req ExecuteDepositRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "VAL_001", "Invalid request body", nil)
+		return
+	}
+
+	transfer, err := h.service.ExecuteDeposit(r.Context(), userID, req)
+	if err != nil {
+		h.handleTransferError(w, err)
+		return
+	}
+
+	response.Success(w, http.StatusCreated, transfer, r.Context())
+}
+
+// CreatePaymentRequest creates a P2P payment request
+// POST /api/payment-requests
+func (h *Handler) CreatePaymentRequest(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("user_id").(string)
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "AUTH_001", "Unauthorized", nil)
+		return
+	}
+
+	var req CreatePaymentRequestRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.Error(w, http.StatusBadRequest, "VAL_001", "Invalid request body", nil)
+		return
+	}
+
+	paymentRequest, err := h.service.CreatePaymentRequest(r.Context(), userID, req)
+	if err != nil {
+		h.handleTransferError(w, err)
+		return
+	}
+
+	response.Success(w, http.StatusCreated, paymentRequest, r.Context())
+}
+
+// ListPaymentRequests lists user's payment requests
+// GET /api/payment-requests
+func (h *Handler) ListPaymentRequests(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("user_id").(string)
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "AUTH_001", "Unauthorized", nil)
+		return
+	}
+
+	requests, err := h.service.ListPaymentRequests(r.Context(), userID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "SYS_001", "Internal server error", nil)
+		return
+	}
+
+	response.Success(w, http.StatusOK, requests, r.Context())
+}
+
+// ApprovePaymentRequest approves a payment request
+// POST /api/payment-requests/{id}/approve
+func (h *Handler) ApprovePaymentRequest(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("user_id").(string)
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "AUTH_001", "Unauthorized", nil)
+		return
+	}
+
+	requestID := chi.URLParam(r, "id")
+	if requestID == "" {
+		response.Error(w, http.StatusBadRequest, "VAL_001", "Payment request ID is required", nil)
+		return
+	}
+
+	transfer, err := h.service.ApprovePaymentRequest(r.Context(), userID, requestID)
+	if err != nil {
+		h.handleTransferError(w, err)
+		return
+	}
+
+	response.Success(w, http.StatusOK, transfer, r.Context())
+}
+
+// RejectPaymentRequest rejects a payment request
+// POST /api/payment-requests/{id}/reject
+func (h *Handler) RejectPaymentRequest(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("user_id").(string)
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "AUTH_001", "Unauthorized", nil)
+		return
+	}
+
+	requestID := chi.URLParam(r, "id")
+	if requestID == "" {
+		response.Error(w, http.StatusBadRequest, "VAL_001", "Payment request ID is required", nil)
+		return
+	}
+
+	err := h.service.RejectPaymentRequest(r.Context(), userID, requestID)
+	if err != nil {
+		h.handleTransferError(w, err)
+		return
+	}
+
+	response.Success(w, http.StatusOK, map[string]string{"message": "Payment request rejected"}, r.Context())
+}

@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/google/uuid"
+	db "github.com/lauratech/fin/back/internal/shared/database/sqlc"
 )
 
 // Service handles card business logic
@@ -275,9 +278,16 @@ func (s *Service) CancelCard(ctx context.Context, userID, cardID string, reason 
 	return s.repo.CancelCard(ctx, cardID)
 }
 
-// ProcessCardTransaction processes a card transaction (checks limits, updates spent)
+// ProcessCardTransaction processes a card transaction (checks limits, updates spent, persists transaction)
 // This would be called by a card transaction processor
-func (s *Service) ProcessCardTransaction(ctx context.Context, cardID string, amountCents int64) error {
+func (s *Service) ProcessCardTransaction(
+	ctx context.Context,
+	cardID string,
+	amountCents int64,
+	merchantName string,
+	merchantCategory string,
+	isInternational bool,
+) error {
 	return s.executeInTransaction(ctx, func(tx *sql.Tx) error {
 		// 1. Lock card record
 		card, err := s.repo.GetForUpdate(ctx, tx, cardID)
@@ -301,7 +311,12 @@ func (s *Service) ProcessCardTransaction(ctx context.Context, cardID string, amo
 			return ErrCardExpired
 		}
 
-		// 4. Check daily limit
+		// 4. Check international transactions
+		if isInternational && card.BlockInternational.Valid && card.BlockInternational.Bool {
+			return ErrInternationalBlocked
+		}
+
+		// 5. Check daily limit
 		currentDailySpent := int64(0)
 		if card.CurrentDailySpentCents.Valid {
 			currentDailySpent = card.CurrentDailySpentCents.Int64
@@ -315,7 +330,7 @@ func (s *Service) ProcessCardTransaction(ctx context.Context, cardID string, amo
 			return ErrDailyLimitExceeded
 		}
 
-		// 5. Check monthly limit
+		// 6. Check monthly limit
 		currentMonthlySpent := int64(0)
 		if card.CurrentMonthlySpentCents.Valid {
 			currentMonthlySpent = card.CurrentMonthlySpentCents.Int64
@@ -329,11 +344,31 @@ func (s *Service) ProcessCardTransaction(ctx context.Context, cardID string, amo
 			return ErrMonthlyLimitExceeded
 		}
 
-		// 6. Update spent amounts
+		// 7. Update spent amounts
 		newDaily := currentDailySpent + amountCents
 		newMonthly := currentMonthlySpent + amountCents
 
-		return s.repo.UpdateSpentAmounts(ctx, cardID, newDaily, newMonthly)
+		err = s.repo.UpdateSpentAmounts(ctx, cardID, newDaily, newMonthly)
+		if err != nil {
+			return err
+		}
+
+		// 8. Persist card transaction
+		_, err = s.repo.CreateCardTransaction(ctx, db.CreateCardTransactionParams{
+			CardID:           card.ID,
+			UserID:           card.UserID,
+			AmountCents:      amountCents,
+			MerchantName:     merchantName,
+			MerchantCategory: sql.NullString{String: merchantCategory, Valid: merchantCategory != ""},
+			Status:           "completed",
+			IsInternational:  sql.NullBool{Bool: isInternational, Valid: true},
+			TransactionDate:  time.Now(),
+		})
+		if err != nil {
+			return err
+		}
+
+		return nil
 	})
 }
 
@@ -362,4 +397,26 @@ func (s *Service) executeInTransaction(ctx context.Context, fn func(*sql.Tx) err
 
 	// Commit transaction
 	return tx.Commit()
+}
+
+// ListCardTransactions retrieves transactions for a specific card
+func (s *Service) ListCardTransactions(ctx context.Context, userID, cardID string, limit, offset int32) ([]db.CardTransaction, error) {
+	// Verify card belongs to user
+	card, err := s.repo.GetByID(ctx, cardID)
+	if err != nil {
+		return nil, err
+	}
+
+	if card.UserID != userID {
+		return nil, ErrUnauthorized
+	}
+
+	cardUUID, _ := uuid.Parse(cardID)
+	return s.repo.ListCardTransactions(ctx, cardUUID, limit, offset)
+}
+
+// ListUserCardTransactions retrieves all user's card transactions
+func (s *Service) ListUserCardTransactions(ctx context.Context, userID string, limit, offset int32) ([]db.CardTransaction, error) {
+	userUUID, _ := uuid.Parse(userID)
+	return s.repo.ListUserCardTransactions(ctx, userUUID, limit, offset)
 }

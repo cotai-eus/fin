@@ -273,3 +273,47 @@ func (s *Service) GetBudgetSummary(ctx context.Context, userID string) (*BudgetA
 		CategoryBreakdown:    categoryBreakdown,
 	}, nil
 }
+
+// GetCategorySpending returns spending breakdown by category from card transactions
+func (s *Service) GetCategorySpending(ctx context.Context, userID string, startDate, endDate string) (map[string]interface{}, error) {
+	// For now, return budget-based analytics
+	// TODO: Integrate with card_transactions table for actual spending data
+	summary, err := s.GetBudgetSummary(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"categories":        summary.CategoryBreakdown,
+		"total_spent_cents": summary.TotalSpentCents,
+		"period": map[string]string{
+			"start_date": startDate,
+			"end_date":   endDate,
+		},
+	}, nil
+}
+
+// GetSpendingTrends returns spending trends over time
+func (s *Service) GetSpendingTrends(ctx context.Context, userID string) (map[string]interface{}, error) {
+	// Get current budget summary
+	summary, err := s.GetBudgetSummary(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return simplified trends for now
+	// TODO: Implement time-series analysis from card_transactions
+	return map[string]interface{}{
+		"current_month": map[string]interface{}{
+			"total_spent_cents":  summary.TotalSpentCents,
+			"total_budget_cents": summary.TotalBudgetCents,
+			"percentage_used":    summary.PercentageUsed,
+		},
+		"trends": []map[string]interface{}{
+			{
+				"month":       "current",
+				"spent_cents": summary.TotalSpentCents,
+			},
+		},
+	}, nil
+}

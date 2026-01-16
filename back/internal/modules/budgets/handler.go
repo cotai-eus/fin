@@ -213,3 +213,43 @@ func (h *Handler) handleBudgetError(w http.ResponseWriter, err error) {
 		response.Error(w, http.StatusInternalServerError, "SYS_001", "Internal server error", nil)
 	}
 }
+
+// GetCategorySpending returns spending breakdown by category
+// GET /api/analytics/category-spending
+func (h *Handler) GetCategorySpending(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("user_id").(string)
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "AUTH_001", "Unauthorized", nil)
+		return
+	}
+
+	// Parse date range from query params (optional)
+	startDate := r.URL.Query().Get("start_date")
+	endDate := r.URL.Query().Get("end_date")
+
+	analytics, err := h.service.GetCategorySpending(r.Context(), userID, startDate, endDate)
+	if err != nil {
+		h.handleBudgetError(w, err)
+		return
+	}
+
+	response.Success(w, http.StatusOK, analytics, r.Context())
+}
+
+// GetSpendingTrends returns spending trends over time
+// GET /api/analytics/spending-trends
+func (h *Handler) GetSpendingTrends(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("user_id").(string)
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "AUTH_001", "Unauthorized", nil)
+		return
+	}
+
+	trends, err := h.service.GetSpendingTrends(r.Context(), userID)
+	if err != nil {
+		h.handleBudgetError(w, err)
+		return
+	}
+
+	response.Success(w, http.StatusOK, trends, r.Context())
+}

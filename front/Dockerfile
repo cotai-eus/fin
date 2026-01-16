@@ -36,10 +36,19 @@ EXPOSE 3000
 RUN apk add --no-cache libc6-compat openssl
 RUN apk del --no-cache zlib || true
 
+# Create non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 # Copia o output standalone
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
+# Change ownership
+RUN chown -R appuser:appgroup /app
+
+# Switch to non-root user
+USER appuser
+
 # O standalone já inclui node_modules necessários
-CMD ["bun", "server.js"]
+CMD ["bun", "server.js", "-H", "0.0.0.0"]

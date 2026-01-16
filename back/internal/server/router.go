@@ -69,17 +69,35 @@ func (s *Server) setupRouter() *chi.Mux {
 				r.With(middlewares.RateLimitMiddleware(10, time.Hour)).Post("/{id}/cancel", s.transfersHandler.Cancel)
 			})
 
+			// Deposits
+			r.With(middlewares.RateLimitMiddleware(10, time.Hour)).Post("/deposits", s.transfersHandler.ExecuteDeposit)
+
+			// Payment Requests
+			r.Route("/payment-requests", func(r chi.Router) {
+				r.With(middlewares.RateLimitMiddleware(10, time.Hour)).Post("/", s.transfersHandler.CreatePaymentRequest)
+				r.Get("/", s.transfersHandler.ListPaymentRequests)
+				r.Post("/{id}/approve", s.transfersHandler.ApprovePaymentRequest)
+				r.Post("/{id}/reject", s.transfersHandler.RejectPaymentRequest)
+			})
+
 			// Cards
 			r.Route("/cards", func(r chi.Router) {
 				r.With(middlewares.RateLimitMiddleware(5, time.Hour)).Post("/", s.cardsHandler.CreateCard)                            // 5/hour - virtual card creation
 				r.With(middlewares.RateLimitMiddleware(100, time.Hour)).Get("/", s.cardsHandler.ListCards)                            // 100/hour
 				r.With(middlewares.RateLimitMiddleware(10, time.Hour)).Get("/{id}", s.cardsHandler.GetCardDetails)                    // 10/hour - sensitive data
+				r.Get("/{id}/transactions", s.cardsHandler.ListCardTransactions)                                                      // Card transactions
 				r.With(middlewares.RateLimitMiddleware(20, time.Hour)).Post("/{id}/block", s.cardsHandler.BlockCard)                  // 20/hour
 				r.With(middlewares.RateLimitMiddleware(20, time.Hour)).Post("/{id}/unblock", s.cardsHandler.UnblockCard)              // 20/hour
 				r.With(middlewares.RateLimitMiddleware(20, time.Hour)).Patch("/{id}/limits", s.cardsHandler.UpdateLimits)             // 20/hour
 				r.With(middlewares.RateLimitMiddleware(20, time.Hour)).Patch("/{id}/security", s.cardsHandler.UpdateSecuritySettings) // 20/hour
 				r.With(middlewares.RateLimitMiddleware(3, time.Hour)).Post("/{id}/pin", s.cardsHandler.SetPIN)                        // 3/hour - very sensitive
 				r.With(middlewares.RateLimitMiddleware(5, time.Hour)).Delete("/{id}", s.cardsHandler.CancelCard)                      // 5/hour
+			})
+
+			// Transactions (card transactions)
+			r.Route("/transactions", func(r chi.Router) {
+				r.Get("/", s.cardsHandler.ListUserTransactions)
+				r.Post("/export", s.cardsHandler.ExportTransactions)
 			})
 
 			// Bills
@@ -100,6 +118,12 @@ func (s *Server) setupRouter() *chi.Mux {
 				r.Get("/{id}", s.budgetsHandler.GetBudget)
 				r.Patch("/{id}", s.budgetsHandler.UpdateBudget)
 				r.Delete("/{id}", s.budgetsHandler.DeleteBudget)
+			})
+
+			// Analytics
+			r.Route("/analytics", func(r chi.Router) {
+				r.Get("/category-spending", s.budgetsHandler.GetCategorySpending)
+				r.Get("/spending-trends", s.budgetsHandler.GetSpendingTrends)
 			})
 
 			// Support

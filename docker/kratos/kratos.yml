@@ -90,9 +90,9 @@ log:
 
 secrets:
   cookie:
-    - PLEASE-CHANGE-ME-I-AM-VERY-INSECURE
+    - PLEASE-CHANGE-ME-I-AM-VERY-INSE1
   cipher:
-    - 32-LONG-SECRET-NOT-SECURE-AT-ALL!
+    - 7ec+21ZEWymeGm2fuONomPDnxfIGnB9I
 
 ciphers:
   algorithm: xchacha20-poly1305

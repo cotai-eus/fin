@@ -367,3 +367,68 @@ func (h *Handler) handleCardError(w http.ResponseWriter, err error) {
 		response.Error(w, http.StatusInternalServerError, "SYS_001", "Internal server error", nil)
 	}
 }
+
+// ListCardTransactions lists transactions for a specific card
+// GET /api/cards/{id}/transactions
+func (h *Handler) ListCardTransactions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("user_id").(string)
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "AUTH_001", "Unauthorized", nil)
+		return
+	}
+
+	cardID := chi.URLParam(r, "id")
+	if cardID == "" {
+		response.Error(w, http.StatusBadRequest, "VAL_001", "Card ID is required", nil)
+		return
+	}
+
+	// Parse pagination (default values)
+	limit := int32(20)
+	offset := int32(0)
+
+	transactions, err := h.service.ListCardTransactions(r.Context(), userID, cardID, limit, offset)
+	if err != nil {
+		h.handleCardError(w, err)
+		return
+	}
+
+	response.Success(w, http.StatusOK, transactions, r.Context())
+}
+
+// ListUserTransactions lists all user's card transactions
+// GET /api/transactions
+func (h *Handler) ListUserTransactions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("user_id").(string)
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "AUTH_001", "Unauthorized", nil)
+		return
+	}
+
+	transactions, err := h.service.ListUserCardTransactions(r.Context(), userID, 50, 0)
+	if err != nil {
+		h.handleCardError(w, err)
+		return
+	}
+
+	response.Success(w, http.StatusOK, transactions, r.Context())
+}
+
+// ExportTransactions exports user transactions to CSV
+// POST /api/transactions/export
+func (h *Handler) ExportTransactions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("user_id").(string)
+	if !ok {
+		response.Error(w, http.StatusUnauthorized, "AUTH_001", "Unauthorized", nil)
+		return
+	}
+
+	// For now, return JSON (CSV export can be implemented later)
+	transactions, err := h.service.ListUserCardTransactions(r.Context(), userID, 1000, 0)
+	if err != nil {
+		h.handleCardError(w, err)
+		return
+	}
+
+	response.Success(w, http.StatusOK, transactions, r.Context())
+}

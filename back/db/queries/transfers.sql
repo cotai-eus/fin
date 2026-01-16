@@ -82,3 +82,9 @@ WHERE user_id = $1
   AND status IN ('completed', 'processing', 'pending')
   AND created_at >= DATE_TRUNC('month', CURRENT_DATE)
   AND created_at < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month';
+
+-- name: ListUserTransfersByStatus :many
+SELECT * FROM transfers
+WHERE user_id = $1 AND status = $2
+ORDER BY created_at DESC;
+
