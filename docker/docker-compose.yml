@@ -9,11 +9,10 @@ services:
       - etcd_data:/bitnami/etcd
     environment:
       ETCD_ENABLE_V2: "true"
-      ALLOW_NONE_AUTHENTICATION: "yes"
+      ALLOW_NONE_AUTHENTICATION: "no"
+      ETCD_ROOT_PASSWORD: "${ETCD_ROOT_PASSWORD}"
       ETCD_ADVERTISE_CLIENT_URLS: "http://etcd:2379"
       ETCD_LISTEN_CLIENT_URLS: "http://0.0.0.0:2379"
-    ports:
-      - "2379:2379/tcp"
     networks:
       apisix:
 
@@ -23,15 +22,14 @@ services:
     volumes:
       - ./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro
       - ./apisix/apisix.yaml:/usr/local/apisix/conf/apisix.yaml:ro
+    environment:
+      - ETCD_ROOT_PASSWORD=${ETCD_ROOT_PASSWORD}
     depends_on:
       - etcd
       - kratos
     ports:
-      - "9180:9180/tcp"
       - "9080:9080/tcp"
-      - "9091:9091/tcp"
       - "9443:9443/tcp"
-      - "9092:9092/tcp"
     networks:
       apisix:
       intranet:
@@ -43,7 +41,7 @@ services:
     image: postgres:16-alpine
     environment:
       - POSTGRES_USER=kratos
-      - POSTGRES_PASSWORD=secret
+      - POSTGRES_PASSWORD=${KRATOS_DB_PASSWORD}
       - POSTGRES_DB=kratos
     networks:
       - intranet
@@ -58,7 +56,7 @@ services:
       postgres-kratos:
         condition: service_healthy
     environment:
-      - DSN=postgres://kratos:secret@postgres-kratos:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
+      - DSN=${KRATOS_DSN}
     networks:
       - intranet
     volumes:
@@ -72,17 +70,14 @@ services:
       kratos-migrate:
         condition: service_completed_successfully
     environment:
-      - DSN=postgres://kratos:secret@postgres-kratos:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
-    ports:
-      - "4433:4433"
-      - "4434:4434"
+      - DSN=${KRATOS_DSN}
     volumes:
       - type: bind
         source: ./kratos
         target: /etc/config/kratos
     networks:
       - intranet
-    command: serve -c /etc/config/kratos/kratos.yml --dev --watch-courier
+    command: serve -c /etc/config/kratos/kratos.yml --watch-courier
   kratos-selfservice-ui-node:
     image: oryd/kratos-selfservice-ui-node:latest
     depends_on:
@@ -90,9 +85,9 @@ services:
     environment:
       - KRATOS_PUBLIC_URL=http://kratos:4433/
       - KRATOS_BROWSER_URL=http://127.0.0.1:9080/.ory/kratos/public/
-      - COOKIE_SECRET=changeme-please-use-random
+      - COOKIE_SECRET=${KRATOS_UI_COOKIE_SECRET}
       - CSRF_COOKIE_NAME=__HOST-csrf
-      - CSRF_COOKIE_SECRET=changeme-csrf-random-secret
+      - CSRF_COOKIE_SECRET=${KRATOS_UI_CSRF_SECRET}
     networks:
       - intranet
     restart: on-failure
@@ -104,12 +99,10 @@ services:
     image: postgres:16-alpine
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_PASSWORD=${CORE_DB_PASSWORD}
       - POSTGRES_DB=lauratech
       - PGDATA=/var/lib/postgresql/data
       - LANG=en_US.utf8
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -131,7 +124,7 @@ services:
       - type: bind
         source: ../back/db/migrations
         target: /migrations
-    command: ["-path", "/migrations", "-database", "postgres://postgres:postgres@db-core:5432/lauratech?sslmode=disable", "up"]
+    command: ["-path", "/migrations", "-database", "${CORE_DATABASE_URL}", "up"]
     networks:
       - intranet
     restart: "no"
@@ -139,8 +132,6 @@ services:
     build:
       context: ../back
       dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
     env_file:
       - ../back/.env
     networks:
@@ -158,8 +149,8 @@ services:
       start_period: 10s
     restart: unless-stopped
     environment:
-      - DATABASE_URL=postgres://postgres:postgres@db-core:5432/lauratech?sslmode=disable
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-32cff1bed37bfe6f2d9ad7ae6b95534d}
+      - DATABASE_URL=${CORE_DATABASE_URL}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - ENVIRONMENT=production
       - PORT=8080
       - TRUSTED_PROXY_IP=apisix

@@ -30,6 +30,12 @@ routes:
     uri: /api/*
     upstream_id: backend
     plugins:
+      limit-req:
+        rate: 10
+        burst: 20
+        rejected_code: 429
+        key_type: var
+        key: remote_addr
       forward-auth:
         uri: "http://kratos:4433/sessions/whoami"
         request_headers:
@@ -48,6 +54,12 @@ routes:
     uri: /.ory/kratos/public/*
     upstream_id: kratos-public
     plugins:
+      limit-req:
+        rate: 10
+        burst: 20
+        rejected_code: 429
+        key_type: var
+        key: remote_addr
       proxy-rewrite:
         regex_uri:
           - "^/.ory/kratos/public/(.*)"

@@ -21,7 +21,7 @@ apisix:
 
   enable_control: true
   control:
-    ip: "0.0.0.0"
+    ip: "127.0.0.1"
     port: 9092
 
 deployment:
@@ -31,7 +31,8 @@ deployment:
 
   admin:
     allow_admin:               # https://nginx.org/en/docs/http/ngx_http_access_module.html#allow
-      - 0.0.0.0/0              # We need to restrict ip access rules for security. 0.0.0.0/0 is for test.
+      - 127.0.0.1/32
+      - 172.16.0.0/12
 
     admin_key:
       - name: "admin"
@@ -47,6 +48,8 @@ deployment:
       - "http://etcd:2379"          # multiple etcd address
     prefix: "/apisix"               # apisix configurations prefix
     timeout: 30                     # 30 seconds
+    user: "root"
+    password: "${ETCD_ROOT_PASSWORD}"
 
 plugin_attr:
   prometheus:

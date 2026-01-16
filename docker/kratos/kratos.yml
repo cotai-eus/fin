@@ -1,6 +1,6 @@
 version: v1.3.0
 
-dsn: postgres://kratos:secret@postgres-kratos:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
+dsn: env://KRATOS_DSN
 
 serve:
   public:
@@ -84,15 +84,15 @@ selfservice:
             - hook: show_verification_ui
 
 log:
-  level: debug
+  level: info
   format: text
-  leak_sensitive_values: true
+  leak_sensitive_values: false
 
 secrets:
   cookie:
-    - PLEASE-CHANGE-ME-I-AM-VERY-INSE1
+    - env://KRATOS_COOKIE_SECRET
   cipher:
-    - 7ec+21ZEWymeGm2fuONomPDnxfIGnB9I
+    - env://KRATOS_CIPHER_SECRET
 
 ciphers:
   algorithm: xchacha20-poly1305
@@ -100,7 +100,7 @@ ciphers:
 hashers:
   algorithm: bcrypt
   bcrypt:
-    cost: 8
+    cost: 12
 
 identity:
   default_schema_id: default
@@ -110,4 +110,4 @@ identity:
 
 courier:
   smtp:
-    connection_uri: smtps://test:test@mailslurper:1025/?skip_ssl_verify=true
+    connection_uri: env://KRATOS_SMTP_CONNECTION_URI
