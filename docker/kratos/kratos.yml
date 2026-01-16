@@ -1,6 +1,6 @@
 version: v1.3.0
 
-dsn: env://KRATOS_DSN
+dsn: postgres://kratos:13432eb0211ce82982c06e526a1b8be3@postgres-kratos:5432/kratos?sslmode=disable&max_conns=20&max_idle_conns=4
 
 serve:
   public:
@@ -90,9 +90,9 @@ log:
 
 secrets:
   cookie:
-    - env://KRATOS_COOKIE_SECRET
+    - ecdebf2e034400f33eec8869d91e8c1d
   cipher:
-    - env://KRATOS_CIPHER_SECRET
+    - 851a2180f28b40e310ccdf93671e2e90
 
 ciphers:
   algorithm: xchacha20-poly1305
@@ -110,4 +110,4 @@ identity:
 
 courier:
   smtp:
-    connection_uri: env://KRATOS_SMTP_CONNECTION_URI
+    connection_uri: smtps://user:pass@mailslurper:1025/?skip_ssl_verify=true

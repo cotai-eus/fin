@@ -55,29 +55,39 @@ services:
     depends_on:
       postgres-kratos:
         condition: service_healthy
+    env_file: .env
     environment:
       - DSN=${KRATOS_DSN}
+      - KRATOS_CIPHER_SECRET=${KRATOS_CIPHER_SECRET}
+      - KRATOS_COOKIE_SECRET=${KRATOS_COOKIE_SECRET}
+      - KRATOS_SMTP_CONNECTION_URI=${KRATOS_SMTP_CONNECTION_URI}
     networks:
       - intranet
     volumes:
       - type: bind
         source: ./kratos
         target: /etc/config/kratos
-    command: -c /etc/config/kratos/kratos.yml migrate sql -e --yes
+    entrypoint: ["/etc/config/kratos/entrypoint.sh"]
+    command: ["-c", "/etc/config/kratos/kratos.yml", "migrate", "sql", "-e", "--yes"]
   kratos:
     image: oryd/kratos:latest
     depends_on:
       kratos-migrate:
         condition: service_completed_successfully
+    env_file: .env
     environment:
       - DSN=${KRATOS_DSN}
+      - KRATOS_CIPHER_SECRET=${KRATOS_CIPHER_SECRET}
+      - KRATOS_COOKIE_SECRET=${KRATOS_COOKIE_SECRET}
+      - KRATOS_SMTP_CONNECTION_URI=${KRATOS_SMTP_CONNECTION_URI}
     volumes:
       - type: bind
         source: ./kratos
         target: /etc/config/kratos
     networks:
       - intranet
-    command: serve -c /etc/config/kratos/kratos.yml --watch-courier
+    entrypoint: ["/etc/config/kratos/entrypoint.sh"]
+    command: ["serve", "-c", "/etc/config/kratos/kratos.yml", "--watch-courier"]
   kratos-selfservice-ui-node:
     image: oryd/kratos-selfservice-ui-node:latest
     depends_on:
