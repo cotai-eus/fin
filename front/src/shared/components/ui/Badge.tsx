@@ -9,11 +9,16 @@
 "use client";
 
 interface BadgeProps {
-  status: "pending" | "completed" | "failed" | "cancelled";
+  variant?: "pending" | "completed" | "failed" | "cancelled";
+  status?: "pending" | "completed" | "failed" | "cancelled";
   label?: string;
+  children?: React.ReactNode;
+  className?: string;
 }
 
-export function Badge({ status, label }: BadgeProps) {
+export function Badge({ variant, status, label, children, className = "" }: BadgeProps) {
+  const statusValue = variant || status || "cancelled";
+  
   const variants = {
     pending: {
       bg: "bg-yellow-100",
@@ -41,14 +46,14 @@ export function Badge({ status, label }: BadgeProps) {
     },
   };
 
-  const variant = variants[status];
-  const displayLabel = label || status.charAt(0).toUpperCase() + status.slice(1);
+  const variantStyles = variants[statusValue];
+  const displayLabel = children || label || statusValue.charAt(0).toUpperCase() + statusValue.slice(1);
 
   return (
     <div
-      className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${variant.bg} ${variant.text} ${variant.border} text-xs font-semibold`}
+      className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${variantStyles.bg} ${variantStyles.text} ${variantStyles.border} text-xs font-semibold ${className}`}
     >
-      <div className={`h-2 w-2 rounded-full ${variant.dot}`} />
+      <div className={`w-2 h-2 rounded-full ${variantStyles.dot}`} />
       {displayLabel}
     </div>
   );

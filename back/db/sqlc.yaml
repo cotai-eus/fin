@@ -1,0 +1,22 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "queries/"
+    schema: "migrations/"
+    gen:
+      go:
+        package: "db"
+        out: "../internal/shared/database/sqlc"
+        sql_package: "database/sql"
+        emit_json_tags: true
+        emit_interface: true
+        emit_exact_table_names: false
+        emit_empty_slices: true
+        json_tags_case_style: "snake"
+        overrides:
+          # Map PostgreSQL BIGINT to Go int64 (for cents)
+          - db_type: "pg_catalog.int8"
+            go_type: "int64"
+          # Map PostgreSQL NUMERIC to Go int64 (for cents)
+          - db_type: "pg_catalog.numeric"
+            go_type: "int64"

@@ -97,13 +97,63 @@ services:
 #######################################################
 #############  Backend API Service ####################
 #######################################################
+  db-core:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=lauratech
+      - PGDATA=/var/lib/postgresql/data
+      - LANG=en_US.utf8
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - intranet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d lauratech"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  db-core-migrate:
+    image: migrate/migrate:v4.15.2
+    depends_on:
+      db-core:
+        condition: service_healthy
+    volumes:
+      - type: bind
+        source: ../back/db/migrations
+        target: /migrations
+    command: ["-path", "/migrations", "-database", "postgres://postgres:postgres@db-core:5432/lauratech?sslmode=disable", "up"]
+    networks:
+      - intranet
+    restart: "no"
   backend:
     build:
       context: ../back
+      dockerfile: ../back/Dockerfile
     ports:
       - "8080:8080"
     networks:
       - intranet
+    depends_on:
+      db-core:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db-core:5432/lauratech?sslmode=disable
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-rxLfh1qxVWFUbGP3pjucwS4oaDc49Y0M+508SV8KyoM=}
+      - ENVIRONMENT=production
 
 #######################################################
 #############  Frontend Service #######################
@@ -138,4 +188,6 @@ networks:
 
 volumes:
   etcd_data:
+    driver: local
+  postgres_data:
     driver: local
